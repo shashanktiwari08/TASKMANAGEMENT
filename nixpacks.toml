@@ -1,0 +1,12 @@
+[phases.build]
+cmds = [
+  "npm install --prefix frontend",
+  "npm run build --prefix frontend",
+  "npm install --prefix backend"
+]
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm"]
+
+[start]
+cmd = "cd backend && npm start"

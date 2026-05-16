@@ -58,7 +58,29 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
 // Serve static files from the React frontend app
-const distPath = path.join(__dirname, "../frontend/dist");
+// Try multiple possible paths for Railway deployment
+const possibleDistPaths = [
+  path.join(__dirname, "../frontend/dist"),
+  path.join(__dirname, "../../frontend/dist"),
+  path.join(process.cwd(), "frontend/dist"),
+  path.join(process.cwd(), "dist"),
+];
+
+let distPath = possibleDistPaths.find((p) => {
+  try {
+    return require("fs").existsSync(p);
+  } catch {
+    return false;
+  }
+});
+
+if (!distPath) {
+  console.warn("[WARN] frontend/dist not found. Possible paths checked:");
+  possibleDistPaths.forEach((p) => console.warn("  -", p));
+  distPath = possibleDistPaths[0]; // fallback
+}
+
+console.log("[SERVE] Static files from:", distPath);
 app.use(express.static(distPath));
 
 // The "catchall" handler: for any non-API request that doesn't

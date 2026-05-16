@@ -1,56 +1,74 @@
 # Railway Deployment Guide
 
-## Quick Fix Checklist
+## CRITICAL: Railway Dashboard Settings
 
-### 1. Railway Environment Variables (Critical)
+### Step 1: Create a Single Service (Monorepo)
 
-Go to your Railway project → Variables tab and add:
+Railway can deploy your frontend + backend as a single service:
 
-| Variable | Value | Example |
-|----------|-------|---------|
-| `MONGODB_URI` | Your MongoDB Atlas URI | `mongodb+srv://user:pass@cluster.mongodb.net/db?retryWrites=true&w=majority` |
-| `JWT_SECRET` | Long random string | `my-super-secret-jwt-key-change-me` |
-| `NODE_ENV` | `production` | `production` |
-| `FRONTEND_URL` | (Optional) Your frontend URL | `https://your-app.vercel.app` |
+1. **Go to Railway Dashboard** → Your Project
+2. **Create ONE service** (not separate frontend/backend services)
+3. **Connect your GitHub repo**: `shashanktiwari08/TASKMANAGEMENT`
+4. **Branch**: `main`
 
-**⚠️ DO NOT commit `.env` files to Git.** They are ignored by `.gitignore` but were added before the ignore rule.
+### Step 2: Set Build Command (in Railway Dashboard)
 
-### 2. MongoDB Atlas Setup
+Go to your service → **Settings** → **Build**:
 
-1. Create a cluster at https://cloud.mongodb.com
-2. Create a database user
-3. Whitelist `0.0.0.0/0` in Network Access (allows Railway to connect)
-4. Copy the connection string and paste into Railway `MONGODB_URI`
+| Setting | Value |
+|---------|-------|
+| **Builder** | `Nixpacks` |
+| **Build Command** | `npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend` |
 
-### 3. Deployment Configuration
+Alternatively, if Railway shows "Build Command" field:
+```bash
+npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend
+```
 
-This repo includes:
-- `railway.json` — Railway deployment config
-- `Procfile` — Fallback process config
-- `package.json` — Root build orchestration
+### Step 3: Set Start Command (in Railway Dashboard)
+
+Go to your service → **Settings** → **Deploy**:
+
+| Setting | Value |
+|---------|-------|
+| **Start Command** | `cd backend && npm start` |
+| **Healthcheck Path** | `/api/health` |
+
+### Step 4: Environment Variables
+
+Go to your service → **Variables**:
+
+| Variable | Required | Value | Example |
+|----------|----------|-------|---------|
+| `MONGODB_URI` | ✅ YES | Your MongoDB Atlas URI | `mongodb+srv://user:pass@cluster.mongodb.net/team_task_manager?retryWrites=true&w=majority` |
+| `JWT_SECRET` | ✅ YES | Long random string | `my-super-secret-jwt-key-change-me-2026` |
+| `NODE_ENV` | ✅ YES | `production` | `production` |
+| `PORT` | ❌ No | Railway auto-sets this | Leave empty |
+| `FRONTEND_URL` | ❌ Optional | Your Railway URL | `https://your-app.up.railway.app` |
+
+### MongoDB Atlas Setup
+
+1. Go to https://cloud.mongodb.com
+2. **Network Access** → **Add IP Address** → `0.0.0.0/0` (allows Railway)
+3. **Database Access** → Create a user with password
+4. **Database** → **Connect** → Drivers → Node.js → Copy URI
+5. Paste into Railway `MONGODB_URI` variable
+
+## How It Works
 
 Railway will:
-1. Build the frontend (`npm run build` in `frontend/`)
-2. Install backend dependencies
-3. Start the backend (`node backend/server.js`)
-4. Backend serves the built frontend from `frontend/dist`
+1. **Build phase**: Install frontend deps → Build frontend → Install backend deps
+2. **Deploy phase**: Start backend server (`node backend/server.js`)
+3. Backend serves built frontend files from `frontend/dist/`
+4. Single URL handles both API and frontend
 
-### 4. CORS (Already Fixed)
+## CORS (Already Fixed)
 
-The backend now automatically allows:
+The backend auto-allows:
 - All `*.railway.app` domains
 - All `*.vercel.app` domains
-- All `*.onrender.com` domains
 - Your `FRONTEND_URL` env var
 - Localhost for development
-
-### 5. Frontend API URL
-
-If you deploy frontend separately (e.g., Vercel):
-- Set `VITE_API_URL` in Vercel env vars to your Railway backend URL (e.g., `https://your-app.up.railway.app`)
-
-If you deploy as monorepo on Railway:
-- Leave `VITE_API_URL` empty — the backend serves the frontend on the same origin
 
 ## Troubleshooting
 
@@ -61,31 +79,45 @@ If you deploy as monorepo on Railway:
 3. Verify `JWT_SECRET` is set
 4. Check CORS errors in browser console
 
-### "Not allowed by CORS"
-
-The backend now auto-allows Railway/Vercel domains. If you still see CORS errors:
-1. Check the Railway logs for `[CORS] Blocked origin: ...`
-2. Add your exact domain to the `FRONTEND_URL` env var
-
-### "Cannot GET /api/..." or HTML returned for API
+### "Cannot GET /api/..." or HTML returned
 
 This was fixed. The catchall route now returns JSON 404 for `/api/*` paths.
 
 ### Frontend shows blank page
 
-1. Check that `frontend/dist` exists after build
-2. Check Railway build logs for frontend build errors
-3. Verify `railway.json` build command is correct
+1. Check Railway **Build logs** — did frontend build succeed?
+2. Look for `[SERVE] Static files from:` in deploy logs
+3. Make sure `frontend/dist` was created during build
+
+### "Module not found" or build errors
+
+1. Check Railway **Build logs**
+2. Make sure Node.js 18+ is used (set in `package.json` engines)
 
 ## Testing After Deploy
 
-1. `GET https://your-app.up.railway.app/api/health` should return `{"ok":true}`
-2. `POST https://your-app.up.railway.app/api/auth/signup` should create a user
-3. Browser console should show no CORS errors
+1. `GET https://your-app.up.railway.app/api/health` → `{"ok":true}`
+2. Open app in browser → DevTools → Console → no CORS errors
+3. Try signup → should work
+
+## Alternative: Deploy Backend Only + Vercel Frontend
+
+If you want separate deployments:
+
+**Railway Backend:**
+- Root Directory: `backend/`
+- Build Command: `npm install`
+- Start Command: `npm start`
+
+**Vercel Frontend:**
+- Root Directory: `frontend/`
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Environment: `VITE_API_URL=https://your-railway-app.up.railway.app`
 
 ## Support
 
-If issues persist, check:
-- Railway dashboard logs
+If issues persist:
+- Check Railway dashboard **Build** and **Deploy** logs
 - Browser DevTools → Network tab for failed requests
 - Browser DevTools → Console for CORS or JS errors
