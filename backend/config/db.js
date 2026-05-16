@@ -7,5 +7,11 @@ export async function connectDB() {
     throw new Error("No MongoDB connection string found! Please ensure MONGO_URL or MONGODB_URI is set in Railway Variables.");
   }
   mongoose.set("strictQuery", true);
-  await mongoose.connect(uri);
+  try {
+    await mongoose.connect(uri);
+    console.log("[DB] MongoDB connected successfully");
+  } catch (err) {
+    console.error("[DB] MongoDB connection failed:", err.message);
+    throw err;
+  }
 }
