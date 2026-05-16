@@ -19,17 +19,25 @@ const __dirname = path.dirname(__filename);
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow the specific frontend and common dev environments
-      const allowed = [
-        "https://taskmanagement-production-40b0.up.railway.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
+      // Allow requests with no origin (mobile apps, curl, same-origin)
+      if (!origin) return callback(null, true);
+
+      // Auto-allow Railway, Vercel, Render, and local dev origins
+      const allowedPatterns = [
+        /^https?:\/\/localhost(:\d+)?$/,
+        /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+        /^https:\/\/.*\.railway\.app$/,
+        /^https:\/\/.*\.vercel\.app$/,
+        /^https:\/\/.*\.onrender\.com$/,
+        /^https:\/\/.*\.netlify\.app$/,
       ];
-      if (!origin || allowed.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
+
+      const envAllowed = process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [];
+      if (envAllowed.includes(origin) || allowedPatterns.some((p) => p.test(origin))) {
+        return callback(null, true);
       }
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
   })
@@ -53,9 +61,13 @@ app.use("/api/dashboard", dashboardRoutes);
 const distPath = path.join(__dirname, "../frontend/dist");
 app.use(express.static(distPath));
 
-// The "catchall" handler: for any request that doesn't
+// The "catchall" handler: for any non-API request that doesn't
 // match one above, send back React's index.html file.
-app.get("*", (req, res) => {
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api/")) {
+    // API 404s should return JSON, not HTML
+    return res.status(404).json({ message: "API endpoint not found" });
+  }
   res.sendFile(path.join(distPath, "index.html"));
 });
 
@@ -67,9 +79,27 @@ app.use((err, _req, res, _next) => {
 });
 
 async function main() {
+  // Validate critical env vars before starting
+  const required = ["JWT_SECRET"];
+  const missing = required.filter((k) => !process.env[k]);
+  if (missing.length) {
+    console.error(`[FATAL] Missing required env vars: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+
+  const dbUri = process.env.MONGODB_URI || process.env.MONGO_URL || process.env.MONGO_PUBLIC_URL || process.env.DATABASE_URL;
+  if (!dbUri) {
+    console.error("[FATAL] No MongoDB connection string found. Set MONGODB_URI, MONGO_URL, or DATABASE_URL.");
+    process.exit(1);
+  }
+  console.log(`[BOOT] JWT_SECRET: ${process.env.JWT_SECRET ? "✓ set" : "✗ missing"}`);
+  console.log(`[BOOT] MongoDB URI: ${dbUri.replace(/:.*@/, ":****@")}`);
+  console.log(`[BOOT] PORT: ${PORT}`);
+  console.log(`[BOOT] NODE_ENV: ${process.env.NODE_ENV || "development"}`);
+
   await connectDB();
-  app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[BOOT] Server listening on port ${PORT}`);
   });
 }
 
