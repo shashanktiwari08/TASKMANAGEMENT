@@ -85,15 +85,7 @@ app.use(express.static(distPath));
 
 // The "catchall" handler: for any non-API request that doesn't
 // match one above, send back React's index.html file.
-// The "catchall" handler: for any non-API request that doesn't match one above, send back React's index.html file.
-app.get(/^(?!\/api).*$/, (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-});
-
-// Explicit API 404 handling: If an explicit API call falls through, return clean JSON instead of HTML
-app.use('/api', (req, res) => {
-    res.status(404).json({ message: "API endpoint not found" });
-});
+app.get("*", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
